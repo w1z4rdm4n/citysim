@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CitySim</title>
+<style>
+  :root{
+    --bg:#1a1a24; --panel:#2a2a3a; --panel2:#22222f; --edge:#44445c;
+    --text:#e8e8d8; --dim:#9898a8; --accent:#58c858; --gold:#e8c848;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--text);
+    font-family:'Courier New', monospace; font-weight:bold;
+    display:flex; flex-direction:column; overflow:hidden; user-select:none;
+  }
+  #topbar{
+    display:flex; align-items:center; gap:18px; padding:6px 12px;
+    background:var(--panel); border-bottom:3px solid var(--edge);
+    font-size:14px; flex-wrap:wrap;
+  }
+  #topbar .stat{white-space:nowrap;}
+  #topbar .lbl{color:var(--dim); font-size:11px;}
+  #funds{color:var(--gold);}
+  #pop{color:var(--accent);}
+  #msg{color:#e88; margin-left:auto; font-size:12px; min-width:180px; text-align:right;}
+  #main{flex:1; display:flex; min-height:0;}
+  #toolbar{
+    width:118px; background:var(--panel); border-right:3px solid var(--edge);
+    display:flex; flex-direction:column; gap:4px; padding:8px 6px; overflow-y:auto;
+  }
+  .tool{
+    background:var(--panel2); border:2px solid var(--edge); color:var(--text);
+    font-family:inherit; font-weight:bold; font-size:11px; padding:6px 4px;
+    cursor:pointer; text-align:left; line-height:1.3;
+  }
+  .tool small{display:block; color:var(--dim); font-size:10px;}
+  .tool:hover{border-color:#8888aa;}
+  .tool.active{border-color:var(--accent); background:#28402a; color:#c8f0c8;}
+  .toolgroup{color:var(--dim); font-size:10px; margin-top:6px; letter-spacing:1px;}
+  #speedrow{display:flex; gap:4px;}
+  #speedrow .tool{flex:1; text-align:center; padding:4px 0;}
+  #viewwrap{flex:1; position:relative; overflow:hidden; background:#08141e;}
+  #game{
+    position:absolute; top:0; left:0; cursor:crosshair;
+  }
+  #rci{display:flex; align-items:flex-end; gap:3px; height:26px;}
+  .rcicol{display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%;}
+  .rcibar{width:10px; background:#555;}
+  .rcicol span{font-size:9px; margin-top:1px;}
+  #help{
+    position:absolute; bottom:6px; left:6px; font-size:11px; color:var(--dim);
+    background:rgba(20,20,30,.75); padding:4px 8px; pointer-events:none;
+  }
+</style>
+</head>
+<body>
+<div id="topbar">
+  <div class="stat"><span class="lbl">FUNDS</span> <span id="funds">$0</span></div>
+  <div class="stat"><span class="lbl">DATE</span> <span id="date">Jan 1900</span></div>
+  <div class="stat"><span class="lbl">POP</span> <span id="pop">0</span></div>
+  <div class="stat"><span class="lbl">TAX</span> <button class="tool" id="taxdn" style="padding:1px 6px">-</button> <span id="taxrate">7%</span> <button class="tool" id="taxup" style="padding:1px 6px">+</button></div>
+  <div class="stat" id="rci">
+    <div class="rcicol"><div class="rcibar" id="rcir" style="background:#40c040"></div><span>R</span></div>
+    <div class="rcicol"><div class="rcibar" id="rcic" style="background:#4060e0"></div><span>C</span></div>
+    <div class="rcicol"><div class="rcibar" id="rcii" style="background:#e0c020"></div><span>I</span></div>
+  </div>
+  <div id="msg"></div>
+</div>
+<div id="main">
+  <div id="toolbar">
+    <div class="toolgroup">SPEED</div>
+    <div id="speedrow">
+      <button class="tool" data-speed="0">&#10074;&#10074;</button>
+      <button class="tool active" data-speed="1">&#9654;</button>
+      <button class="tool" data-speed="3">&#9654;&#9654;</button>
+    </div>
+    <div class="toolgroup">TOOLS</div>
+    <button class="tool" data-tool="bulldoze">Bulldoze<small>$1</small></button>
+    <button class="tool" data-tool="road">Road<small>$10</small></button>
+    <button class="tool" data-tool="wire">Power Line<small>$5</small></button>
+    <div class="toolgroup">ZONES</div>
+    <button class="tool active" data-tool="res">Residential<small>$100</small></button>
+    <button class="tool" data-tool="com">Commercial<small>$100</small></button>
+    <button class="tool" data-tool="ind">Industrial<small>$100</small></button>
+    <div class="toolgroup">POWER</div>
+    <button class="tool" data-tool="plant">Coal Plant<small>$3000</small></button>
+    <div class="toolgroup">SERVICES</div>
+    <button class="tool" data-tool="firestn">Fire Station<small>$500</small></button>
+    <button class="tool" data-tool="police">Police Stn<small>$500</small></button>
+    <div class="toolgroup">DISASTERS</div>
+    <button class="tool" id="dis-fire">Fire</button>
+    <button class="tool" id="dis-tornado">Tornado</button>
+    <button class="tool" id="dis-meteor">Meteor</button>
+    <div class="toolgroup">VIEWS</div>
+    <button class="tool active" data-view="none">City</button>
+    <button class="tool" data-view="landval">Land Value</button>
+    <button class="tool" data-view="crime">Crime</button>
+    <button class="tool" data-view="pollution">Pollution</button>
+    <div class="toolgroup">INFO</div>
+    <button class="tool" data-tool="query">Query</button>
+  </div>
+  <div id="viewwrap">
+    <canvas id="game"></canvas>
+    <div id="help">drag to build &middot; right-drag / arrows to scroll &middot; wheel to zoom &middot; zones need power (lines) + a road within 3 tiles</div>
+  </div>
+</div>
+<script>
+"use strict";
+//////////////////// CONSTANTS ////////////////////
+const W = 64, H = 64, TILE = 16;
+// tile types
+const T = {DIRT:0, WATER:1, TREE:2, ROAD:3, WIRE:4, RES:5, COM:6, IND:7, PLANT:8, RUBBLE:9, FIRESTN:10, POLICE:11, FIRE:12};
+const COST = {bulldoze:1, road:10, wire:5, res:100, com:100, ind:100, plant:3000, firestn:500, police:500};
+const TOOLTYPE = {road:T.ROAD, wire:T.WIRE, res:T.RES, com:T.COM, ind:T.IND, plant:T.PLANT, firestn:T.FIRESTN, police:T.POLICE};
+const MAXLVL = 4;              // zone density levels 0..4
+const POP_PER_LVL = 8;         // residents or jobs per level
+
+//////////////////// STATE ////////////////////
+const map = new Uint8Array(W*H);      // tile type
+const lvl = new Uint8Array(W*H);      // zone density level (fire tiles: age)
+const powered = new Uint8Array(W*H);  // recomputed each tick
+const pollution = new Uint8Array(W*H), crime = new Uint8Array(W*H), landval = new Uint8Array(W*H);
+const fireCov = new Uint8Array(W*H), polCov = new Uint8Array(W*H);
+let tornado = null, view = "none";
+let funds = 10000, taxRate = 7;
+let month = 0, year = 1900;
+let speed = 1, tool = "res";
+let demandR = 1, demandC = 0, demandI = 1;
+const idx = (x,y)=>y*W+x;
+const inB = (x,y)=>x>=0&&y>=0&&x<W&&y<H;
+
+//////////////////// TERRAIN GEN ////////////////////
+(function genTerrain(){
+  let seed = 1234567;
+  const rnd = ()=> (seed = (seed*1103515245+12345)&0x7fffffff)/0x7fffffff;
+  // value noise
+  const G = 9, grid = [];
+  for(let i=0;i<G*G;i++) grid.push(rnd());
+  const lerp=(a,b,t)=>a+(b-a)*(t*t*(3-2*t));
+  const noise=(x,y)=>{
+    const gx=x/W*(G-1), gy=y/H*(G-1);
+    const x0=Math.floor(gx), y0=Math.floor(gy);
+    const fx=gx-x0, fy=gy-y0;
+    const a=grid[y0*G+x0], b=grid[y0*G+Math.min(x0+1,G-1)];
+    const c=grid[Math.min(y0+1,G-1)*G+x0], d=grid[Math.min(y0+1,G-1)*G+Math.min(x0+1,G-1)];
+    return lerp(lerp(a,b,fx), lerp(c,d,fx), fy);
+  };
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const n = noise(x,y);
+    if(n<0.30) map[idx(x,y)] = T.WATER;
+    else if(n>0.62 && rnd()<0.7) map[idx(x,y)] = T.TREE;
+    else map[idx(x,y)] = T.DIRT;
+  }
+})();
+
+//////////////////// SPRITES ////////////////////
+// Sprites render at 2x resolution with gradients & soft shadows for a smoother look.
+const SRES = 32, U = SRES/16;
+function makeSprite(paint){
+  const c = document.createElement("canvas");
+  c.width = c.height = SRES;
+  const g = c.getContext("2d");
+  paint(g);
+  return c;
+}
+const px = (g,c,x,y,w=1,h=1)=>{g.fillStyle=c; g.fillRect(x*2*U,y*2*U,w*2*U,h*2*U);}; // 8-grid
+const fx = (g,c,x,y,w=1,h=1)=>{g.fillStyle=c; g.fillRect(x*U,y*U,w*U,h*U);};        // 16-grid
+function vgrad(g,c1,c2,x=0,y=0,w=SRES,h=SRES){
+  const gr=g.createLinearGradient(0,y,0,y+h);
+  gr.addColorStop(0,c1); gr.addColorStop(1,c2);
+  g.fillStyle=gr; g.fillRect(x,y,w,h);
+}
+function grass(g){
+  vgrad(g,"#85a952","#6d9142");
+  for(let i=0;i<7;i++) fx(g,"rgba(0,0,0,0.07)",(i*5+2)%16,(i*7+3)%16);
+  for(let i=0;i<5;i++) fx(g,"rgba(255,255,255,0.10)",(i*7+1)%16,(i*3+6)%16);
+}
+function shade(g){ // gentle top-light / bottom-shadow over the tile
+  vgrad(g,"rgba(255,255,255,0.07)","rgba(0,0,0,0.10)");
+}
+const SPR = {};
+SPR.dirt = makeSprite(g=>grass(g));
+SPR.water = [0,1].map(f=>makeSprite(g=>{
+  vgrad(g,"#2b6aa6","#16406f");
+  g.strokeStyle="rgba(255,255,255,0.28)"; g.lineWidth=U*0.8; g.lineCap="round";
+  g.beginPath();
+  for(const [yy,off] of [[5,f?1:6],[11,f?8:3]]){
+    g.moveTo(off*U, yy*U);
+    g.quadraticCurveTo((off+2)*U,(yy-1.2)*U,(off+4)*U,yy*U);
+    g.quadraticCurveTo((off+6)*U,(yy+1.2)*U,(off+8)*U,yy*U);
+  }
+  g.stroke();
+}));
+SPR.tree = makeSprite(g=>{
+  grass(g);
+  g.fillStyle="rgba(0,0,0,0.18)";
+  g.beginPath(); g.ellipse(8*U,12.5*U,5*U,1.8*U,0,0,7); g.fill();
+  vgrad(g,"#6b4a26","#4a3016",7.2*U,8*U,1.6*U,4.5*U);
+  const can=(cx,cy,r)=>{
+    const gr=g.createRadialGradient((cx-1.2)*U,(cy-1.2)*U,r*U*0.15,cx*U,cy*U,r*U);
+    gr.addColorStop(0,"#54903a"); gr.addColorStop(1,"#27541d");
+    g.fillStyle=gr; g.beginPath(); g.arc(cx*U,cy*U,r*U,0,7); g.fill();
+  };
+  can(8,6,4.4); can(5.4,7.6,2.7); can(10.6,7.6,2.6);
+});
+SPR.rubble = makeSprite(g=>{
+  grass(g);
+  g.fillStyle="rgba(0,0,0,0.10)"; g.beginPath(); g.ellipse(8*U,10*U,6*U,3.5*U,0,0,7); g.fill();
+  const rock=(x,y,r,c)=>{ g.fillStyle=c; g.beginPath(); g.arc(x*U,y*U,r*U,0,7); g.fill(); };
+  rock(5,9,2.2,"#787878"); rock(9.5,11,2.6,"#8c8c8c"); rock(11,7,1.6,"#666");
+  rock(7,6,1.3,"#909090"); rock(12.5,10.5,1.2,"#707070");
+});
+// roads: 16 variants by neighbor mask (N=1,E=2,S=4,W=8)
+SPR.road = [];
+for(let m=0;m<16;m++) SPR.road.push(makeSprite(g=>{
+  grass(g);
+  const A=g.createLinearGradient(0,0,0,SRES);
+  A.addColorStop(0,"#47474f"); A.addColorStop(1,"#37373e");
+  g.fillStyle=A;
+  g.fillRect(4*U,4*U,8*U,8*U);
+  if(m&1) g.fillRect(4*U,0,8*U,4*U); if(m&4) g.fillRect(4*U,12*U,8*U,4*U);
+  if(m&8) g.fillRect(0,4*U,4*U,8*U); if(m&2) g.fillRect(12*U,4*U,4*U,8*U);
+  g.fillStyle="#d8d84a";
+  if((m&5)&&!(m&10)){ const y0=(m&1)?1:5, y1=(m&4)?15:11; for(let y=y0;y<y1;y+=4) g.fillRect(7.6*U,y*U,0.8*U,2*U); }
+  else if((m&10)&&!(m&5)){ const x0=(m&8)?1:5, x1=(m&2)?15:11; for(let x=x0;x<x1;x+=4) g.fillRect(x*U,7.6*U,2*U,0.8*U); }
+}));
+// wires: same mask scheme
+SPR.wire = [];
+for(let m=0;m<16;m++) SPR.wire.push(makeSprite(g=>{
+  grass(g);
+  g.strokeStyle="#3a3a3a"; g.lineWidth=U*0.6; g.lineCap="round";
+  g.beginPath();
+  if(m&1){ g.moveTo(8*U,8*U); g.lineTo(8*U,0); }
+  if(m&4){ g.moveTo(8*U,8*U); g.lineTo(8*U,16*U); }
+  if(m&8){ g.moveTo(8*U,8*U); g.lineTo(0,8*U); }
+  if(m&2){ g.moveTo(8*U,8*U); g.lineTo(16*U,8*U); }
+  if(m===0){ g.moveTo(8*U,0); g.lineTo(8*U,16*U); }
+  g.stroke();
+  vgrad(g,"#c9b384","#8f7b4f",6.9*U,4.5*U,2.2*U,7*U);
+  fx(g,"#e8e050",7,7,2,2);
+}));
+// zones: [type][level 0..4], plus unpowered flash handled at draw time
+function zoneSprite(kind, level){
+  return makeSprite(g=>{
+    grass(g);
+    const edge = kind==="res"?"rgba(32,120,32,0.7)": kind==="com"?"rgba(48,72,180,0.7)":"rgba(140,130,32,0.75)";
+    g.strokeStyle=edge; g.lineWidth=U;
+    g.strokeRect(U*0.5, U*0.5, SRES-U, SRES-U);
+    const wall=(x,y,w,h,c1,c2)=>{
+      g.fillStyle="rgba(0,0,0,0.16)";
+      g.fillRect(x*2*U+U*0.6, (y+h)*2*U-U*0.2, w*2*U, U*0.9); // drop shadow
+      vgrad(g,c1,c2,x*2*U,y*2*U,w*2*U,h*2*U);
+    };
+    if(level===0){ fx(g,edge,7,7,2,2); shade(g); return; }
+    if(kind==="res"){
+      const roof="#a83828", roofL="#c44e38", win="#5c4020";
+      const house=(x,y,w,h)=>{ wall(x,y,w,h,"#e2d2aa","#c2ac82"); vgrad(g,roofL,roof,x*2*U,(y-1)*2*U,w*2*U,2*U); };
+      if(level===1){ house(2,4,3,3); px(g,win,3,5); }
+      else if(level===2){ house(1,4,3,3); px(g,win,2,5); house(5,4,2,3); }
+      else if(level===3){ house(1,3,3,4); px(g,win,2,4); px(g,win,2,6); house(5,3,2,4); px(g,win,5,5); }
+      else { house(1,2,6,5);
+             px(g,win,2,3); px(g,win,4,3); px(g,win,6,3);
+             px(g,win,2,5); px(g,win,4,5); px(g,win,6,5); }
+    } else if(kind==="com"){
+      const win="#f0eebc";
+      const h = 2+level;
+      wall(2,8-h-1,4,h+1,"#93a4d4","#66769e");
+      vgrad(g,"#4a5688","#3a4470",2*2*U,(8-h-1)*2*U,4*2*U,2*U);
+      for(let wy=8-h;wy<7;wy+=2){ px(g,win,3,wy); px(g,win,5,wy); }
+      if(level>=3) wall(6,4,1,3,"#8898c8","#606f96");
+    } else {
+      const stack="#54545a";
+      wall(1,4,6,3,"#ab9c8c","#8a7c6c");
+      vgrad(g,"#7a6a58","#645648",1*2*U,3*2*U,6*2*U,2*U);
+      px(g,stack,2,1,1,3); if(level>=2) px(g,stack,4,1,1,3);
+      const puff=(x,y,r)=>{ g.fillStyle="rgba(210,210,214,0.8)"; g.beginPath(); g.arc(x*U,y*U,r*U,0,7); g.fill(); };
+      if(level>=3) puff(5,1.2,1.1);
+      if(level>=4) puff(9,1,1.2);
+    }
+    shade(g);
+  });
+}
+SPR.res=[]; SPR.com=[]; SPR.ind=[];
+for(let l=0;l<=MAXLVL;l++){ SPR.res.push(zoneSprite("res",l)); SPR.com.push(zoneSprite("com",l)); SPR.ind.push(zoneSprite("ind",l)); }
+SPR.plant = [0,1].map(f=>makeSprite(g=>{
+  vgrad(g,"#6a6a74","#54545e");
+  g.strokeStyle="rgba(0,0,0,0.35)"; g.lineWidth=U;
+  g.strokeRect(U*0.5,U*0.5,SRES-U,SRES-U);
+  vgrad(g,"#3c3c46","#2a2a32",2*U,6*U,12*U,8*U);
+  vgrad(g,"#34343c","#26262c",4*U,2*U,2*U,5*U);
+  vgrad(g,"#34343c","#26262c",10*U,2*U,2*U,5*U);
+  fx(g,"#e8e050",7,9,2,2);
+  const puff=(x,y,r,a)=>{ g.fillStyle=`rgba(205,205,210,${a})`; g.beginPath(); g.arc(x*U,y*U,r*U,0,7); g.fill(); };
+  if(f){ puff(5,1.4,1.4,0.8); puff(11,1,1.0,0.65); }
+  else { puff(5,1,1.0,0.65); puff(11,1.6,1.4,0.8); }
+  shade(g);
+}));
+SPR.firestn = makeSprite(g=>{
+  grass(g);
+  g.fillStyle="rgba(0,0,0,0.16)"; g.fillRect(2.5*U,13*U,12*U,U);
+  vgrad(g,"#b03434","#7c1e1e",2*U,4*U,12*U,9*U);
+  vgrad(g,"#d05050","#a83434",2*U,2*U,12*U,2.4*U);
+  fx(g,"#f0f0f0",4,6,2,2); fx(g,"#f0f0f0",10,6,2,2);
+  vgrad(g,"#6a4620","#452c0e",6*U,8*U,4*U,5*U);
+  shade(g);
+});
+SPR.police = makeSprite(g=>{
+  grass(g);
+  g.fillStyle="rgba(0,0,0,0.16)"; g.fillRect(2.5*U,13*U,12*U,U);
+  vgrad(g,"#2c48ac","#1c2c74",2*U,4*U,12*U,9*U);
+  vgrad(g,"#4864cc","#2c44a4",2*U,2*U,12*U,2.4*U);
+  fx(g,"#f0f0f0",4,6,2,2); fx(g,"#f0f0f0",10,6,2,2);
+  fx(g,"#e8d040",7,7,2,1);
+  vgrad(g,"#503418","#38230e",6*U,9*U,4*U,4*U);
+  shade(g);
+});
+SPR.fire = [0,1].map(f=>makeSprite(g=>{
+  vgrad(g,"#33201a","#241510");
+  const flame=(cx,cy,r,c1,c2)=>{
+    const gr=g.createRadialGradient(cx*U,cy*U,0,cx*U,cy*U,r*U);
+    gr.addColorStop(0,c1); gr.addColorStop(1,c2);
+    g.fillStyle=gr; g.beginPath(); g.arc(cx*U,cy*U,r*U,0,7); g.fill();
+  };
+  flame(8,10,7,"#e86020","rgba(200,40,10,0.12)");
+  flame(f?6:10,8,4,"#f0a030","rgba(230,120,20,0.1)");
+  flame(f?9.5:6.5,6,2.6,"#f8e060","rgba(240,200,60,0.1)");
+}));
+SPR.nopower = makeSprite(g=>{
+  g.scale(U,U);
+  g.fillStyle="rgba(232,208,32,0.95)";
+  g.beginPath();
+  g.moveTo(9,2); g.lineTo(5,9); g.lineTo(8,9); g.lineTo(6,14); g.lineTo(11,7); g.lineTo(8,7); g.closePath();
+  g.fill();
+});
+
+//////////////////// SIMULATION ////////////////////
+function isZone(t){ return t===T.RES||t===T.COM||t===T.IND; }
+function conducts(t){ return t===T.WIRE||t===T.PLANT||isZone(t)||t===T.FIRESTN||t===T.POLICE; }
+function flammable(t){ return t===T.TREE||isZone(t)||t===T.PLANT||t===T.FIRESTN||t===T.POLICE; }
+
+function radial(arr,i,R){
+  const x0=i%W, y0=(i-x0)/W;
+  for(let y=Math.max(0,y0-R);y<=Math.min(H-1,y0+R);y++)
+    for(let x=Math.max(0,x0-R);x<=Math.min(W-1,x0+R);x++){
+      const d=Math.abs(x-x0)+Math.abs(y-y0);
+      if(d<=R){ const j=idx(x,y); arr[j]=Math.min(255,arr[j]+(R-d)*28); }
+    }
+}
+function boxBlur(a,passes){
+  const tmp=new Float32Array(W*H);
+  for(let p=0;p<passes;p++){
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      let s=0,n=0;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+        const nx=x+dx,ny=y+dy;
+        if(inB(nx,ny)){ s+=a[idx(nx,ny)]; n++; }
+      }
+      tmp[idx(x,y)]=s/n*1.05;
+    }
+    a.set(tmp);
+  }
+}
+function computeMaps(){
+  const pol=new Float32Array(W*H), crm=new Float32Array(W*H), amen=new Float32Array(W*H);
+  fireCov.fill(0); polCov.fill(0);
+  for(let i=0;i<W*H;i++){
+    const t=map[i];
+    if(t===T.IND) pol[i]=lvl[i]*45+20;
+    else if(t===T.PLANT) pol[i]=160;
+    else if(t===T.FIRE) pol[i]=120;
+    else if(t===T.ROAD) pol[i]=10;
+    if(isZone(t)) crm[i]=lvl[i]*22;
+    if(t===T.WATER) amen[i]=90; else if(t===T.TREE) amen[i]=70;
+    if(t===T.FIRESTN && powered[i]) radial(fireCov,i,9);
+    else if(t===T.POLICE && powered[i]) radial(polCov,i,9);
+  }
+  boxBlur(pol,3); boxBlur(crm,3); boxBlur(amen,2);
+  for(let i=0;i<W*H;i++){
+    pollution[i]=Math.min(255,pol[i]);
+    crime[i]=Math.min(255,Math.max(0,crm[i]-polCov[i]));
+    landval[i]=Math.min(255,Math.max(0,100+amen[i]-pol[i]*0.6-crime[i]*0.4));
+  }
+}
+
+function fireTick(){
+  const spread=[];
+  for(let i=0;i<W*H;i++){
+    if(map[i]!==T.FIRE) continue;
+    lvl[i]++;
+    const ext = 0.04 + fireCov[i]/255*0.45 + (lvl[i]>8?0.4:0);
+    if(rand()<ext){ map[i]=T.RUBBLE; lvl[i]=0; dirty=true; continue; }
+    const x=i%W, y=(i-x)/W;
+    for(const [nx,ny] of [[x,y-1],[x+1,y],[x,y+1],[x-1,y]]){
+      if(!inB(nx,ny)) continue;
+      const j=idx(nx,ny);
+      if(flammable(map[j]) && rand()<0.07*(1-fireCov[j]/255)) spread.push(j);
+    }
+  }
+  for(const j of spread){ if(flammable(map[j])){ map[j]=T.FIRE; lvl[j]=0; dirty=true; } }
+}
+function ignite(i){ if(i>=0 && flammable(map[i])){ map[i]=T.FIRE; lvl[i]=0; dirty=true; } }
+function findRandom(pred){
+  for(let n=0;n<500;n++){ const i=(rand()*W*H)|0; if(pred(map[i])) return i; }
+  return -1;
+}
+function tornadoTick(){
+  if(!tornado) return;
+  tornado.ttl--;
+  if(tornado.ttl<=0){ tornado=null; flashMsg("The tornado has dissipated."); dirty=true; return; }
+  tornado.x += tornado.dx + (rand()-0.5)*1.2;
+  tornado.y += tornado.dy + (rand()-0.5)*1.2;
+  if(tornado.x<0||tornado.y<0||tornado.x>=W||tornado.y>=H){ tornado=null; flashMsg("The tornado has left the area."); dirty=true; return; }
+  const i = idx(tornado.x|0, tornado.y|0), t = map[i];
+  if(t!==T.DIRT && t!==T.WATER && t!==T.RUBBLE && t!==T.FIRE){ map[i]=T.RUBBLE; lvl[i]=0; }
+  dirty=true;
+}
+function meteor(){
+  const x0=(rand()*W)|0, y0=(rand()*H)|0;
+  for(let y=y0-3;y<=y0+3;y++)for(let x=x0-3;x<=x0+3;x++){
+    if(!inB(x,y)) continue;
+    const d=Math.abs(x-x0)+Math.abs(y-y0), i=idx(x,y);
+    if(map[i]===T.WATER) continue;
+    if(d<=2){ map[i]=T.RUBBLE; lvl[i]=0; }
+    else if(d===3 && flammable(map[i]) && rand()<0.6){ map[i]=T.FIRE; lvl[i]=0; }
+  }
+  flashMsg("Meteor strike reported!"); dirty=true;
+}
+
+function computePower(){
+  powered.fill(0);
+  const q=[];
+  for(let i=0;i<W*H;i++) if(map[i]===T.PLANT){ powered[i]=1; q.push(i); }
+  while(q.length){
+    const i=q.pop(), x=i%W, y=(i-x)/W;
+    const nb=[[x,y-1],[x+1,y],[x,y+1],[x-1,y]];
+    for(const [nx,ny] of nb){
+      if(!inB(nx,ny)) continue;
+      const j=idx(nx,ny);
+      if(!powered[j] && conducts(map[j])){ powered[j]=1; q.push(j); }
+    }
+  }
+}
+
+function hasRoadAccess(x,y){
+  for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){
+    const nx=x+dx, ny=y+dy;
+    if(inB(nx,ny) && map[idx(nx,ny)]===T.ROAD) return true;
+  }
+  return false;
+}
+
+function census(){
+  let r=0,c=0,i2=0, rz=0,cz=0,iz=0;
+  for(let i=0;i<W*H;i++){
+    if(map[i]===T.RES){ r+=lvl[i]; rz++; }
+    else if(map[i]===T.COM){ c+=lvl[i]; cz++; }
+    else if(map[i]===T.IND){ i2+=lvl[i]; iz++; }
+  }
+  return {resPop:r*POP_PER_LVL, comJobs:c*POP_PER_LVL, indJobs:i2*POP_PER_LVL, rz,cz,iz};
+}
+
+function computeDemand(s){
+  const jobs = s.comJobs + s.indJobs;
+  const pop = s.resPop;
+  // people come when there are jobs (plus small frontier pull); leave when jobless
+  demandR = Math.max(-1, Math.min(1, (jobs*1.15 + 40 - pop)/120));
+  // industry wants workers; commerce needs a customer base (grows with city size)
+  demandI = Math.max(-1, Math.min(1, (pop*0.55 + 25 - s.indJobs)/100));
+  demandC = Math.max(-1, Math.min(1, (pop*0.35 - 12 - s.comJobs)/100));
+  // high taxes suppress everything
+  const taxDrag = (taxRate-7)*0.06;
+  demandR-=taxDrag; demandC-=taxDrag; demandI-=taxDrag;
+}
+
+let rngState = 987654321;
+const rand = ()=> (rngState = (rngState*1103515245+12345)&0x7fffffff)/0x7fffffff;
+
+function growTick(){
+  computePower();
+  computeMaps();
+  const s = census();
+  computeDemand(s);
+  fireTick();
+  tornadoTick();
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i = idx(x,y), t = map[i];
+    if(!isZone(t)) continue;
+    let d = t===T.RES?demandR : t===T.COM?demandC : demandI;
+    if(t===T.RES) d += (landval[i]-100)/280 - crime[i]/350;
+    else if(t===T.COM) d += (landval[i]-100)/420 - crime[i]/420;
+    const ok = powered[i] && hasRoadAccess(x,y);
+    if(ok && d>0 && lvl[i]<MAXLVL && rand()<d*0.35){ lvl[i]++; }
+    else if((!ok || d<-0.25) && lvl[i]>0 && rand()<0.15){ lvl[i]--; }
+  }
+}
+
+function monthTick(){
+  month++;
+  if(month>=12){
+    month=0; year++;
+    const s = census();
+    const taxes = Math.round(s.resPop * taxRate * 0.7);
+    const upkeep = countType(T.ROAD) + Math.round(countType(T.WIRE)*0.5) + countType(T.PLANT)*100
+                 + (countType(T.FIRESTN)+countType(T.POLICE))*40;
+    funds += taxes - upkeep;
+    flashMsg(`Year ${year-1}: taxes +$${taxes}, upkeep -$${upkeep}`);
+  }
+  // rare accidental fires in industry
+  if(rand()<0.03){
+    const i = findRandom(t=>t===T.IND||t===T.PLANT);
+    if(i>=0 && lvl[i]>0 || (i>=0 && map[i]===T.PLANT)){ ignite(i); flashMsg("Fire reported in the industrial district!"); }
+  }
+}
+function countType(t){ let n=0; for(let i=0;i<W*H;i++) if(map[i]===t) n++; return n; }
+
+//////////////////// BUILD / TOOLS ////////////////////
+function canBuildOn(t, toolName){
+  if(toolName==="wire") return t===T.DIRT||t===T.TREE||t===T.WATER;
+  return t===T.DIRT||t===T.TREE||t===T.RUBBLE;
+}
+function applyTool(x,y){
+  if(!inB(x,y)) return;
+  const i = idx(x,y), t = map[i];
+  if(tool==="query"){ queryTile(x,y); return; }
+  if(tool==="bulldoze"){
+    if(t===T.DIRT||t===T.WATER) return;
+    if(funds<COST.bulldoze){ flashMsg("Not enough funds"); return; }
+    funds-=COST.bulldoze;
+    map[i] = (t===T.TREE)?T.DIRT:T.RUBBLE;
+    if(t===T.RUBBLE) map[i]=T.DIRT;
+    lvl[i]=0; dirty=true; return;
+  }
+  const cost = COST[tool];
+  if(cost===undefined) return;
+  if(!canBuildOn(t,tool)){ return; }
+  if(t===T.WATER && tool!=="wire"){ return; }
+  if(funds<cost){ flashMsg("Not enough funds"); return; }
+  funds-=cost;
+  map[i]=TOOLTYPE[tool]; lvl[i]=0; dirty=true;
+}
+function queryTile(x,y){
+  const i=idx(x,y), t=map[i];
+  const names={[T.DIRT]:"Clear land",[T.WATER]:"Water",[T.TREE]:"Trees",[T.ROAD]:"Road",
+    [T.WIRE]:"Power line",[T.RES]:"Residential",[T.COM]:"Commercial",[T.IND]:"Industrial",
+    [T.PLANT]:"Coal plant",[T.RUBBLE]:"Rubble",[T.FIRESTN]:"Fire station",
+    [T.POLICE]:"Police station",[T.FIRE]:"FIRE!"};
+  let s = names[t];
+  if(isZone(t)) s += ` L${lvl[i]} ${powered[i]?"pwr":"NO PWR"} ${hasRoadAccess(x,y)?"road":"NO ROAD"}`;
+  if(t!==T.WATER) s += ` | LV ${landval[i]} CR ${crime[i]} POL ${pollution[i]}`;
+  flashMsg(s);
+}
+
+//////////////////// VIEW / RENDER ////////////////////
+const wrap = document.getElementById("viewwrap");
+const cv = document.getElementById("game");
+const ctx = cv.getContext("2d");
+ctx.imageSmoothingEnabled = true;
+ctx.imageSmoothingQuality = "high";
+let zoom = 2, camX = 0, camY = 0, dirty = true, animFrame = 0;
+
+function resize(){
+  cv.width = wrap.clientWidth; cv.height = wrap.clientHeight;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  dirty = true;
+}
+window.addEventListener("resize", resize);
+
+function draw(){
+  const ts = TILE*zoom;
+  ctx.fillStyle = "#08141e";
+  ctx.fillRect(0,0,cv.width,cv.height);
+  const x0 = Math.max(0, Math.floor(camX/ts)), y0 = Math.max(0, Math.floor(camY/ts));
+  const x1 = Math.min(W-1, Math.ceil((camX+cv.width)/ts)), y1 = Math.min(H-1, Math.ceil((camY+cv.height)/ts));
+  // animation frames: water very slow, smoke moderate, fire quick
+  const wf = Math.floor(animFrame/70)&1;   // ~2.3s per frame
+  const sf = Math.floor(animFrame/25)&1;   // ~0.8s per frame
+  const ff = Math.floor(animFrame/10)&1;
+  for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){
+    const i = idx(x,y), t = map[i];
+    let spr;
+    switch(t){
+      case T.WATER: spr=SPR.water[wf]; break;
+      case T.TREE: spr=SPR.tree; break;
+      case T.ROAD: spr=SPR.road[nbMask(x,y,T.ROAD)]; break;
+      case T.WIRE: spr=SPR.wire[nbMask(x,y,T.WIRE,true)]; break;
+      case T.RES: spr=SPR.res[lvl[i]]; break;
+      case T.COM: spr=SPR.com[lvl[i]]; break;
+      case T.IND: spr=SPR.ind[lvl[i]]; break;
+      case T.PLANT: spr=SPR.plant[sf]; break;
+      case T.FIRESTN: spr=SPR.firestn; break;
+      case T.POLICE: spr=SPR.police; break;
+      case T.FIRE: spr=SPR.fire[ff]; break;
+      case T.RUBBLE: spr=SPR.rubble; break;
+      default: spr=SPR.dirt;
+    }
+    const sx = x*ts-camX, sy = y*ts-camY;
+    ctx.drawImage(spr, sx, sy, ts, ts);
+    if(isZone(t) && !powered[i] && sf) ctx.drawImage(SPR.nopower, sx, sy, ts, ts);
+    if(view!=="none" && t!==T.WATER){
+      const v = view==="landval"?landval[i] : view==="crime"?crime[i] : pollution[i];
+      ctx.fillStyle = view==="landval" ? `rgba(40,200,90,${v/255*0.55})` : `rgba(220,40,40,${v/255*0.6})`;
+      ctx.fillRect(sx,sy,ts,ts);
+    }
+  }
+  if(tornado){
+    const cx = tornado.x*ts-camX, cy = tornado.y*ts-camY;
+    ctx.fillStyle = "rgba(115,115,128,0.85)";
+    for(let k=0;k<5;k++){
+      const r = (k+1)*ts*0.14+2;
+      const wob = Math.sin(animFrame*0.25+k*1.3)*ts*0.12;
+      ctx.beginPath();
+      ctx.arc(cx+wob, cy-k*ts*0.3, r, 0, 7);
+      ctx.fill();
+    }
+  }
+  // hover cursor
+  if(hoverX>=0){
+    ctx.strokeStyle="#fff"; ctx.lineWidth=2;
+    ctx.strokeRect(hoverX*ts-camX+1, hoverY*ts-camY+1, ts-2, ts-2);
+  }
+}
+function nbMask(x,y,t,plantToo){
+  let m=0;
+  const chk=(nx,ny)=>inB(nx,ny)&&(map[idx(nx,ny)]===t||(plantToo&&map[idx(nx,ny)]===T.PLANT));
+  if(chk(x,y-1)) m|=1; if(chk(x+1,y)) m|=2; if(chk(x,y+1)) m|=4; if(chk(x-1,y)) m|=8;
+  return m;
+}
+
+//////////////////// INPUT ////////////////////
+let hoverX=-1, hoverY=-1, painting=false, panning=false, lastMX=0, lastMY=0;
+function tileAt(e){
+  const r = cv.getBoundingClientRect();
+  const ts = TILE*zoom;
+  return [Math.floor((e.clientX-r.left+camX)/ts), Math.floor((e.clientY-r.top+camY)/ts)];
+}
+cv.addEventListener("mousedown", e=>{
+  if(e.button===2 || e.button===1){ panning=true; lastMX=e.clientX; lastMY=e.clientY; return; }
+  painting=true;
+  const [x,y]=tileAt(e); applyTool(x,y);
+});
+window.addEventListener("mouseup", ()=>{ painting=false; panning=false; });
+cv.addEventListener("contextmenu", e=>e.preventDefault());
+cv.addEventListener("mousemove", e=>{
+  if(panning){
+    camX-=e.clientX-lastMX; camY-=e.clientY-lastMY;
+    lastMX=e.clientX; lastMY=e.clientY; clampCam(); dirty=true; return;
+  }
+  const [x,y]=tileAt(e);
+  if(x!==hoverX||y!==hoverY){ hoverX=x; hoverY=y; dirty=true; }
+  if(painting && tool!=="query" && tool!=="plant") applyTool(x,y);
+});
+cv.addEventListener("mouseleave", ()=>{ hoverX=hoverY=-1; dirty=true; });
+cv.addEventListener("wheel", e=>{
+  e.preventDefault();
+  const r = cv.getBoundingClientRect();
+  const mx=e.clientX-r.left, my=e.clientY-r.top;
+  const wx=(mx+camX)/(TILE*zoom), wy=(my+camY)/(TILE*zoom);
+  zoom = Math.max(1, Math.min(4, zoom + (e.deltaY<0?1:-1)));
+  camX = wx*TILE*zoom-mx; camY = wy*TILE*zoom-my;
+  clampCam(); dirty=true;
+},{passive:false});
+window.addEventListener("keydown", e=>{
+  const s=24;
+  if(e.key==="ArrowUp")camY-=s; else if(e.key==="ArrowDown")camY+=s;
+  else if(e.key==="ArrowLeft")camX-=s; else if(e.key==="ArrowRight")camX+=s;
+  else return;
+  clampCam(); dirty=true;
+});
+function clampCam(){
+  const ts=TILE*zoom;
+  camX = Math.max(0, Math.min(W*ts-cv.width, camX));
+  camY = Math.max(0, Math.min(H*ts-cv.height, camY));
+  if(W*ts<cv.width) camX=(W*ts-cv.width)/2;
+  if(H*ts<cv.height) camY=(H*ts-cv.height)/2;
+}
+
+//////////////////// UI ////////////////////
+document.querySelectorAll("[data-tool]").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll("[data-tool]").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active"); tool=b.dataset.tool;
+  });
+});
+document.querySelectorAll("[data-speed]").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll("[data-speed]").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active"); speed=+b.dataset.speed;
+  });
+});
+document.getElementById("taxup").addEventListener("click",()=>{taxRate=Math.min(20,taxRate+1);});
+document.getElementById("taxdn").addEventListener("click",()=>{taxRate=Math.max(0,taxRate-1);});
+document.querySelectorAll("[data-view]").forEach(b=>{
+  b.addEventListener("click", ()=>{
+    document.querySelectorAll("[data-view]").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active"); view=b.dataset.view; dirty=true;
+  });
+});
+document.getElementById("dis-fire").addEventListener("click", ()=>{
+  const i = findRandom(t=>flammable(t)&&t!==T.TREE);
+  if(i>=0){ ignite(i); flashMsg("Fire has broken out!"); }
+  else flashMsg("Nothing to burn... yet.");
+});
+document.getElementById("dis-tornado").addEventListener("click", ()=>{
+  tornado = {x:rand()*W, y:rand()*H, dx:rand()-0.5, dy:rand()-0.5, ttl:150};
+  flashMsg("Tornado warning issued!");
+});
+document.getElementById("dis-meteor").addEventListener("click", meteor);
+let msgTimer=null;
+function flashMsg(s){
+  document.getElementById("msg").textContent=s;
+  clearTimeout(msgTimer);
+  msgTimer=setTimeout(()=>document.getElementById("msg").textContent="",4000);
+}
+const MONTHS=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function updateHUD(){
+  const s=census();
+  document.getElementById("funds").textContent="$"+funds;
+  document.getElementById("date").textContent=MONTHS[month]+" "+year;
+  document.getElementById("pop").textContent=s.resPop;
+  document.getElementById("taxrate").textContent=taxRate+"%";
+  const bar=(id,v)=>{document.getElementById(id).style.height=Math.round(Math.max(0.05,Math.abs(v))*18)+"px";
+    document.getElementById(id).style.opacity=v>=0?1:0.35;};
+  bar("rcir",demandR); bar("rcic",demandC); bar("rcii",demandI);
+}
+
+//////////////////// MAIN LOOP ////////////////////
+let tickAcc=0, lastT=performance.now();
+function loop(now){
+  const dt=now-lastT; lastT=now;
+  if(speed>0){
+    tickAcc+=dt*speed;
+    while(tickAcc>500){ tickAcc-=500; growTick(); monthTick(); dirty=true; }
+  }
+  animFrame++;
+  if(animFrame%5===0) dirty=true; // covers water/smoke/fire frame changes
+  if(tornado) dirty=true;         // funnel wobble
+  if(dirty){ draw(); dirty=false; }
+  updateHUD();
+  requestAnimationFrame(loop);
+}
+resize();
+computePower();
+camX=(W*TILE*zoom-cv.width)/2; camY=(H*TILE*zoom-cv.height)/2; clampCam();
+flashMsg("Welcome, Mayor. Build a coal plant, wires, roads, and zones!");
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
